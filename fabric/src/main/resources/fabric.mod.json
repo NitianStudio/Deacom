@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "deacom",
+  "version": "${version}",
+
+  "name": "deacom",
+  "description": "",
+  "authors": [],
+  "contact": {},
+
+  "license": "MIT",
+  "icon": "icon.png",
+
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "io.github.nitianstudio.deacom.fabric.DeacomFabric"
+    ]
+  },
+  "mixins": [
+    "deacom.mixins.json",
+    "deacom-common.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "minecraft": ">=1.21"
+  }
+}

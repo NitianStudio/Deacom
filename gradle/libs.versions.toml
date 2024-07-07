@@ -1,0 +1,11 @@
+[versions]
+architectury-plugin = "3.4-SNAPSHOT"
+architectury-loom = "1.7-SNAPSHOT"
+minecraft-version = "1.21"
+shadow = "8.1.1"
+[plugins]
+architectury-plugin = { id = "architectury-plugin", version.ref = "architectury-plugin" }
+architectury-loom = { id = "dev.architectury.loom", version.ref = "architectury-loom" }
+shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadow" }
+[libraries]
+minecraft = { module = "com.mojang:minecraft", version.ref = "minecraft-version" }
