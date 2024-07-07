@@ -10,11 +10,12 @@ plugins {
     alias(libs.plugins.shadow).apply(false)
 }
 
-val minecraftVersion = libs.versions.minecraft.version.get()
+val minecraftVersion: String by rootProject
 val enabledPlatforms: String by rootProject
 val fabricLoaderVersion: String by rootProject
 val architecturyVersion: String by rootProject
 val fabricApiVersion: String by rootProject
+
 
 architectury {
     minecraft = minecraftVersion
@@ -59,6 +60,12 @@ allprojects {
         java {
             withSourcesJar()
         }
+        processResources {
+            inputs.property("version", project.version);
+            filesMatching(listOf("META-INF/mods.toml", "fabric.mods.toml")) {
+                expand("version" to project.version)
+            }
+        }
     }
 }
 
@@ -70,63 +77,110 @@ subprojects {
     configure<LoomGradleExtensionAPI> {
         silentMojangMappingsLicense()
     }
-    dependencies {
-        "minecraft"("com.mojang:minecraft:${minecraftVersion}")
+    architectury {
+        when(project.name) {
+            "common" -> {
+                common(enabledPlatforms.split(","))
+            }
+            "fabric" -> {
+                platformSetupLoomIde()
+                fabric()
+            }
+            "forge" -> {
+                platformSetupLoomIde()
+                forge()
+            }
+            "neoforge" -> {
+                neoForge {
+                    platformPackage = "forge"
+                }
+            }
+        }
+    }
 
-        "mappings"(project.the<LoomGradleExtensionAPI>().layered {
+    if (project.name != "common") {
+        val common by configurations.creating
+        val shadowCommon by configurations.creating
+        val developmentFabric by configurations.getting
+
+        configurations {
+            compileClasspath.configure { extendsFrom(common) }
+            runtimeClasspath.configure { extendsFrom(common) }
+            developmentFabric.extendsFrom(common)
+        }
+    }
+
+
+    dependencies {
+        val minecraft by configurations.getting
+        val mappings by configurations.getting
+        val modImplementation by configurations.getting
+        val modApi by configurations.getting
+        minecraft("com.mojang:minecraft:${minecraftVersion}")
+
+        mappings(project.the<LoomGradleExtensionAPI>().layered {
             officialMojangMappings()
             parchment("org.parchmentmc.data:parchment-${minecraftVersion}:2024.06.23@zip")
         })
 
-    }
+        if (!project.name.contains("forge")) {
+            modImplementation("net.fabricmc:fabric-loader:${fabricLoaderVersion}")
+        }
+        modApi("dev.architectury:architectury${if (project.name == "common") "" else "-${project.name}"}:${architecturyVersion}")
 
-    dependencies {
-        "modImplementation"("net.fabricmc:fabric-loader:${fabricLoaderVersion}")
-        "modApi"("dev.architectury:architectury${if (project.name == "common") "" else "-${project.name}"}:${architecturyVersion}")
-    }
-
-    when(project.name) {
-        "common" -> {
-            architectury {
-                common(enabledPlatforms.split(","))
-            }
-            dependencies {
-
+        when(project.name) {
+            "fabric" -> {
+                modApi("net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}")
             }
         }
-        "fabric" -> {
-            architectury {
-                platformSetupLoomIde()
-                fabric()
-            }
 
-
-        }
-        "forge" -> {
-
-        }
-        "neoforge" -> {
-
+        if (project.name != "common") {
+            val common by configurations.getting
+            val shadowCommon by configurations.getting
+            common(project(path = ":common", configuration = "namedElements")) { setTransitive(false) }
+            shadowCommon(project(path = ":common", configuration = "transformProductionFabric")) { setTransitive(false) }
         }
 
     }
+    if(project.name != "common") {
+        val shadowCommon by configurations.getting
+        tasks {
+            jar {
+                archiveClassifier.set("dev")
+            }
 
+            val shadowJar = named<ShadowJar>("shadowJar") {
+                if (project.name.contains("forge")) {
+                    exclude("fabric.mod.json")
+                }
+                configurations = listOf(shadowCommon)
+                archiveClassifier.set("dev-shadow")
+            }
 
-    tasks {
-        jar {
-            archiveClassifier.set("dev")
+            named<RemapJarTask>("remapJar") {
+                injectAccessWidener.set(true)
+                inputFile.set(shadowJar.get().archiveFile)
+                dependsOn(shadowJar.get())
+                archiveClassifier.set(null as String?)
+            }
+            named<Jar>("sourcesJar") {
+                val commonSourcesJar = project(":common").tasks.named<Jar>("sourcesJar").get()
+                dependsOn(commonSourcesJar)
+                from(commonSourcesJar.archiveFile.map {
+                    zipTree(it)
+                })
+            }
+
         }
-        named<RemapJarTask>("remapJar") {
-            archiveClassifier.set(null as String?)
-        }
-
-        processResources {
-            inputs.property("version", project.version);
-            filesMatching(listOf("META-INF/mods.toml", "fabric.mods.toml")) {
-                expand("version" to project.version)
+        components.getByName("java") {
+            this as AdhocComponentWithVariants
+            this.withVariantsFromConfiguration(project.configurations.getByName("shadowRuntimeElements")) {
+                skip()
             }
         }
     }
+
+
     publishing {
         publications {
             create<MavenPublication>("${project.name}Maven") {

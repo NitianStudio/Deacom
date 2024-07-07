@@ -15,5 +15,14 @@ listOf("common", "fabric").forEach {
     val project = project(":${it}")
     project.name = it
     project.projectDir = file("build/${it}")
+    if (it.contains("forge")) {
+        val properties = File(project.projectDir, "gradle.properties")
+        if (!properties.exists()) {
+            properties.bufferedWriter(Charsets.UTF_8).use {
+                it.write("loom.platform=${it}")
+                it.close()
+            }
+        }
+    }
 
 }
